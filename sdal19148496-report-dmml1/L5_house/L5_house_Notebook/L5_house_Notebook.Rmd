@@ -1,0 +1,187 @@
+---
+title: "Appendix 2 - House price prediction from 0.5 million record data set"
+output:
+  html_notebook: default
+  word_document: default
+---
+
+### Step 1 : Collecting Data
+The data set is collected in CSV format from kaggele and below is the reference for the same.
+
+A.Sleem.(2018)Housepricing.[Online].
+Available:https://www.kaggle.com/greenwing1985/housepricing
+
+### Step 2 : Exploring, preprocessing and cleaning the data
+Primary setup
+```{r setup}
+knitr::opts_knit$set(root.dir = '/Users/sobil/Documents/MSC/Sem 1/Data Mining & Machine Learning/Project/L5_house/')
+remove(list = ls())
+set.seed(1)
+options(scipen=1)
+```
+
+loading alll the libraries required
+```{r}
+library(data.table)
+library(boot)
+library(fpp2)
+library(car)
+library(leaps)
+```
+
+#### 1) reading the raw csv file
+```{r}
+house <- fread("HousePrices_HalfMil.csv")
+```
+
+#### 2) exploratory analysis 
+Structure of the house data frame
+```{r}
+str(house)
+```
+
+Summary of the house data frame
+```{r}
+summary(house)
+```
+
+#### 3) check normal distribution of Prices
+```{r}
+hist(house$Prices,
+     col = "orange",
+     border = "black",
+     prob = TRUE,
+     xlab = "House prices",
+     main = "Histogram")
+lines(density(house$Prices),
+      lwd = 2,
+      col = "chocolate3")
+house.boxplot <- boxplot(house$Prices, main = "Box plot", ylab = "House prices")
+```
+
+#### 4) removing outliers to make more genarlised  model
+```{r}
+house.boxplot$out
+house <- subset(house, ! house$Prices %in% house.boxplot$out)
+house.boxplot <- boxplot(house$Prices, main = "Box plot", ylab = "House prices")
+house.boxplot$out
+hist(house$Prices,
+     col = "orange",
+     border = "black",
+     prob = TRUE,
+     xlab = "House prices",
+     main = "Histogram")
+lines(density(house$Prices),
+      lwd = 2,
+      col = "chocolate3")
+```
+
+```{r}
+house.boxplot$out
+```
+
+re-numbering the rows names
+```{r}
+row.names(house) <- 1:499984
+```
+
+### Step 3 - Data transformation 
+cheking correlation
+```{r}
+cor(house)
+```
+
+making a new df with only correlated columns
+```{r}
+chouse <- house
+chouse <- chouse[,-c(2,3,6,10,11,14,15)]
+
+chouse.colnames <-colnames(chouse)
+chouse.colnames[3] <- "White_Marbel"
+chouse.colnames[4] <- "Indian_Marbel"
+colnames(chouse) <- chouse.colnames
+```
+
+checking correlation
+```{r}
+cor(chouse)
+```
+
+### Step 4 : Training a model on the data
+model 1
+```{r}
+house.fit1 <- glm(Prices ~ . + White_Marbel:Indian_Marbel , data = chouse)
+```
+
+### Step 5 : Evaluating the model
+Checking the summary of the model
+```{r}
+summary(house.fit1)
+```
+
+### Step 6 : Improving the model
+#### 1) Adding all the possible relation to the model
+model 2
+adding the correlation independent variabels
+```{r}
+house.fit2 <- update(house.fit1, ~ . - White_Marbel:Indian_Marbel)
+summary(house.fit2) #8882283
+accuracy(house.fit2)
+house.k10.fit2.err <- cv.glm(data = chouse,glmfit = house.fit2, K = 10)
+house.k10.fit2.err$delta# 3039673
+#checking r2
+house.fit2.lm <- lm(Prices ~ ., data = chouse)
+summary(house.fit2.lm) # 0.9793
+```
+
+#### 2) check the best fit 
+```{r}
+house.fit2.bestFit1 <- regsubsets(Prices ~ Area + Baths + White_Marbel + Indian_Marbel + 
+                                     Floors + City + Fiber + `Glass Doors`, data = chouse, nbest = 1, nvmax = 6)
+par(mfrow = c(1,1))
+#subsets(house.fit2.bestFit1, statistic = "adjr2", max.size = 6, min.size = 1)
+plot(house.fit2.bestFit1, scale = "adjr2")
+```
+
+4 predictors
+```{r}
+house.fit4 <- glm(Prices ~ White_Marbel + Floors + City + Fiber, data = chouse)
+summary(house.fit4) #9783831
+house.k10.fit4.err <- cv.glm(data = chouse,glmfit = house.fit4, K = 10)
+house.k10.fit4.err$delta# 18446855
+#checking r2
+house.fit4.lm <- lm(Prices ~ White_Marbel + Floors + City + Fiber, data = chouse)
+summary(house.fit4.lm) # 0.8742
+```
+
+5 predictors
+```{r}
+house.fit5 <- glm(Prices ~ White_Marbel + Floors + City + Fiber + `Glass Doors`, data = chouse)
+summary(house.fit5) #9628934
+house.k10.fit5.err <- cv.glm(data = chouse,glmfit = house.fit5, K = 10)
+house.k10.fit5.err$delta# 13532564
+#checking r2
+house.fit5.lm <- lm(Prices ~ White_Marbel + Floors + City + Fiber + `Glass Doors`, data = chouse)
+summary(house.fit5.lm) # 0.9077
+```
+
+6 predictors
+```{r}
+house.fit6 <- glm(Prices ~ White_Marbel + Indian_Marbel + Floors + City + Fiber + `Glass Doors`, data = chouse)
+summary(house.fit6) #9445048
+house.k10.fit6.err <- cv.glm(data = chouse,glmfit = house.fit6, K = 10)
+house.k10.fit6.err$delta# 9368131
+#checking r2
+house.fit6.lm <- lm(Prices ~ White_Marbel + Indian_Marbel + Floors + City + Fiber + `Glass Doors`, data = chouse)
+summary(house.fit6.lm) # 0.9361
+```
+
+#### 3) Best model performance is house.fit2
+```{r}
+par(mfrow = c(2,2))
+summary(house.fit2)
+summary(house.fit2.lm)
+plot(house.fit2)
+```
+
+

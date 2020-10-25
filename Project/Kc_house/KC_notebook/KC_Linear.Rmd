@@ -1,0 +1,558 @@
+---
+title: "Appendix 1 - King County house price prediction"
+output:
+  html_notebook: default
+  word_document: default
+---
+
+## Part 1 - Multi-Linear Regression Model
+
+### Step 1 : Collecting Data
+The data set is collected in CSV format from kaggele and below is the reference for the same.
+
+Harlfoxem. (2016) House sales in king county, usa. [Online]. Available:https://www.kaggle.com/harlfoxem/housesalesprediction
+
+### Step 2 : Exploring, preprocessing and cleaning the data
+Primary setup
+```{r setup}
+knitr::opts_knit$set(root.dir = '/Users/sobil/Documents/MSC/Sem 1/Data Mining & Machine Learning/Project/Kc_house/')
+remove(list = ls())
+```
+
+#### 1) reading the raw csv file
+```{r}
+kc_house <- read.csv("kc_house_data.csv", stringsAsFactors = FALSE)
+```
+
+#### 2) exploratory analysis 
+Structure of the kc_house data frame
+```{r}
+str(kc_house)
+```
+
+Summary of the kc_house data frame
+```{r}
+summary(kc_house)
+```
+Plotting histogram of the house prices
+```{r}
+library(ggplot2)
+library(ggthemes)
+theme_set(theme_gdocs())
+ggplot(kc_house, aes(x=price)) + geom_histogram(bins = 10, color = 'blue', aes(fill=..count..), alpha = 0.4) + xlab('House Price') + ylab('Count') + ggtitle('House Price distribution Plot')
+```
+
+#### 3) cleaning & removing the unrelated and insignificant columns
+removing id
+```{r}
+kc_house <- kc_house[,-c(1)]
+```
+
+removing the lat, long, zipcode
+```{r}
+kc_house <- kc_house[,-c(18,16,17)]
+```
+
+sqft_living, sqft_lot are related and can calculate sqft_living15, sqft_lot15 resp.
+```{r}
+kc_house <- kc_house[,-c(17,16)]
+```
+
+cheking NAs
+```{r}
+apply(X = kc_house,MARGIN =  2, FUN = function(col) any(is.na(col))) # no NAs
+```
+
+#### 4) exploring the colmuns for outliers and influential points
+```{r}
+table(kc_house$bedrooms) 
+```
+33 bedroom seems to be a influential point
+```{r}
+kc_house <- kc_house[kc_house$bedrooms != 33,]
+```
+
+Column - bathrooms
+```{r}
+table(kc_house$bathrooms)
+```
+
+Column - View
+```{r}
+table(kc_house$view)
+```
+
+Resetting the row names to index
+```{r}
+row.names(kc_house) <- 1:21612
+```
+
+### Step 3.1 - Data transformation - default price
+
+coverting the date field type from chr to date
+```{r}
+kc_house$date <- as.Date(kc_house$date, format = "%Y%m%d")
+summary(kc_house$date)
+```
+
+Date is almost for the same duration of time, so the sample is unbiased
+remove date
+```{r}
+kc_house <- kc_house[,-c(1)]
+```
+
+converting the waterfront to factors (0,1)
+```{r}
+table(kc_house$waterfront)
+kc_house$waterfront <- as.factor(kc_house$waterfront)
+```
+
+### Step 4.1 : Training a model on the data - default price
+
+adding the libraries required
+```{r}
+library(boot)
+library(car)
+library(leaps)
+library(psych)
+```
+
+checking correlation
+```{r}
+pairs.panels(kc_house)
+```
+
+Model the linear model
+simple model 1
+```{r}
+house.fit1 <- glm(price ~ ., data = kc_house)
+```
+
+### Step 5.1 : Evaluating the model
+Checking the summary of the model
+```{r}
+summary(house.fit1)
+```
+
+### Step 6.1 : Improving the model
+#### 1) Adding all the possible relation to the model
+Model 2 - step backward
+```{r}
+house.fit2 <- step(house.fit1)
+summary(house.fit2)
+```
+
+Model 3 - adding interaction
+```{r}
+house.fit3 <- update(house.fit2, ~ . + bedrooms:bathrooms + bedrooms:grade + bedrooms:sqft_above + bedrooms:sqft_living + bathrooms:grade + bathrooms:sqft_above + sqft_above:sqft_living + grade:sqft_living + bathrooms:sqft_living + floors:sqft_living + view:sqft_living + floors:condition + floors:grade + floors:sqft_above + waterfront:view + view:grade)
+summary(house.fit3)
+```
+
+Model 4 - step backward
+```{r}
+house.fit4 <- step(house.fit3)
+summary(house.fit4)
+```
+
+Model 5 - removing insigificant floors predictor
+```{r}
+house.fit5 <- update(house.fit2, ~ . - floors)
+summary(house.fit5)
+```
+
+#### 2) check the best fit by ignoring uncorrelated variables
+checking the best predictors to predict the house price
+```{r}
+bstFits1 <- regsubsets(price ~ bedrooms+bathrooms+sqft_living+sqft_lot+floors+waterfront+view+condition+grade+sqft_above+sqft_basement+yr_built+yr_renovated, data = kc_house, nbest = 1, nvmax = 6)
+par(mfrow = c(1,1))
+#subsets(bstFits1, statistic = "adjr2", max.size = 6)
+plot(bstFits1, scale = "adjr2")
+```
+
+Doing cross-validation for 4 predictors using K-Fold
+```{r}
+house.k10.4 <- glm(price ~ sqft_living + waterfront + yr_renovated + grade, data = kc_house)
+summary(house.k10.4) # 596532
+house.k10.4.err <- cv.glm(data = kc_house,glmfit = house.k10.4, K = 10)
+round(house.k10.4.err$delta[1], 4) # 56952103727
+```
+
+Checking the r square and adj. r square values
+```{r}
+house.k10.4.lm <- lm(price ~ sqft_living + waterfront + yr_renovated + grade, data = kc_house)
+summary(house.k10.4.lm)
+```
+
+Plot the model
+```{r}
+par(mfrow = c(2,2))
+plot(house.k10.4)
+```
+### Step 3.2 - Data transformation - log(price) and using all variables
+#### After looking at the results of the plot and previously from histogram in step 2 - taking log of the price
+
+checking distribution & outliers of dependent value
+```{r}
+par(mfrow = c(1,2))
+hist(kc_house$price,
+     col="orange", 
+     border="black",
+     prob = TRUE,
+     xlab = "House prices",
+     main = "Histogram")
+lines(density(kc_house$price),
+      lwd = 2,
+      col = "chocolate3") # not distributed normally - right skewed
+plot(kc_house$price, main = "Scatter plot", ylab = "House prices")
+
+# covert to log
+hist(log(kc_house$price),
+     col="orange", 
+     border="black",
+     prob = TRUE,
+     xlab = "House prices",
+     main = "Histogram")
+lines(density(log(kc_house$price)),
+      lwd = 2,
+      col = "chocolate3") # not distributed normally
+plot(log(kc_house$price), main = "Scatter plot", ylab = "House prices")
+```
+
+creating a new data frame - coverting price to log(price)
+```{r}
+kc_house_log <- kc_house 
+kc_house_log$price <- log(kc_house_log$price)
+summary(kc_house_log)
+```
+
+### Step 4.2 : Training a model on the data - log(price) and using all variables
+
+checking correlation
+```{r}
+pairs.panels(kc_house_log)
+```
+
+model 1
+```{r}
+house.glm1 <- glm(price ~ bedrooms+bathrooms+sqft_living+sqft_lot+floors+waterfront+view+condition+grade+sqft_above+sqft_basement+yr_built+yr_renovated, data = kc_house_log)
+```
+
+### Step 5.2 : Evaluating the model - log(price) and using all variables
+```{r}
+summary(house.glm1)
+```
+
+### Step 6.2 : Improving the model - log(price) and using all variables
+#### 1) Adding all the possible relation to the model
+model 2
+```{r}
+house.glm2 <- update(house.glm1, ~ . - sqft_basement)
+summary(house.glm2)
+```
+
+model 3
+```{r}
+house.glm3 <- update(house.glm2, ~ . - sqft_lot)
+summary(house.glm3)
+```
+
+model 4
+```{r}
+house.glm4 <- update(house.glm3, ~ . - yr_renovated)
+summary(house.glm4)
+```
+
+adding interaction by checking the graph
+model 5 - sqft_living interaction
+```{r}
+house.glm5 <- update(house.glm4, ~ . + sqft_above:sqft_living + grade:sqft_living + bathrooms:sqft_living + floors:sqft_living + view:sqft_living)
+summary(house.glm5)
+```
+
+model 6
+```{r}
+house.glm6 <- update(house.glm5, ~ . - bathrooms:sqft_living)
+summary(house.glm6)
+```
+
+model 7 - bedrooms interaction
+```{r}
+house.glm7 <- update(house.glm6, ~ . + bedrooms:bathrooms + bedrooms:grade + bedrooms:sqft_above)
+summary(house.glm7)
+```
+
+ model 8
+```{r}
+house.glm8 <- update(house.glm7, ~ . - bedrooms:sqft_above - bedrooms:bathrooms - sqft_living:sqft_above)
+summary(house.glm8)
+```
+
+model 9 - bathrooms interaction
+```{r}
+house.glm9 <- update(house.glm8, ~ . + bathrooms:floors + bathrooms:grade + bathrooms:sqft_above)
+summary(house.glm9)
+```
+
+model 10
+```{r}
+house.glm10 <- update(house.glm9, ~ . - bathrooms:grade - bathrooms:floors)
+summary(house.glm10)
+```
+
+model 11 - floors interaction
+```{r}
+house.glm11 <- update(house.glm10, ~ . + floors:condition + floors:grade + floors:sqft_above)
+summary(house.glm11)
+```
+
+model 12
+```{r}
+house.glm12 <- update(house.glm11, ~ . - sqft_living:floors - floors:condition -floors:grade)
+summary(house.glm12)
+```
+
+model 13
+```{r}
+house.glm13 <- update(house.glm12, ~ . - sqft_above)
+summary(house.glm13)
+```
+
+model 14 - floors interaction
+```{r}
+house.glm14 <- update(house.glm13, ~ . + waterfront:view + view:grade + grade:sqft_above)
+summary(house.glm14)
+```
+
+model 15
+```{r}
+house.glm15 <- update(house.glm14, ~ . - grade:sqft_above - view:grade - waterfront)
+summary(house.glm15)
+```
+
+
+#### 2) as per concept of parsimony : checking best fit from above model
+```{r}
+house.glm15.bestFit1 <- regsubsets(price ~ bedrooms + bathrooms + sqft_living + floors + 
+                                  view + condition + grade + yr_built + sqft_living:grade + 
+                                  sqft_living:view + bedrooms:grade + bathrooms:sqft_above + 
+                                  floors:sqft_above + waterfront:view, data = kc_house_log, nbest = 2, nvmax = 10)
+par(mfrow = c(1,1))
+#subsets(house.glm15.bestFit1, statistic = "adjr2")
+plot(house.glm15.bestFit1, scale = "adjr2")
+```
+
+from above we can see 4,5,6 and later produce almost similar result
+```{r}
+house.glm15.bestFit2 <- regsubsets(price ~ bedrooms + bathrooms + sqft_living + floors + 
+                                     view + condition + grade + yr_built + sqft_living:grade + 
+                                     sqft_living:view + bedrooms:grade + bathrooms:sqft_above + 
+                                     floors:sqft_above + waterfront:view, data = kc_house_log, nbest = 1, nvmax = 6)
+par(mfrow = c(1,1))
+#subsets(house.glm15.bestFit2, statistic = "adjr2", max.size = 6, min.size = 1)
+plot(house.glm15.bestFit2, scale = "adjr2")
+```
+
+Doing cross-validation for 3,4,5,6 predictors using K-Fold
+3 predictors
+predictor : 3-i
+```{r}
+house.k10.3i <- glm(price ~ sqft_living + grade + yr_built, data = kc_house_log)
+summary(house.k10.3i) # 12786
+house.k10.3i.err <- cv.glm(data = kc_house_log,glmfit = house.k10.3i, K = 10)
+round(house.k10.3i.err$delta[1], 4) # 0.1058
+```
+
+predictor : 3-ii
+```{r}
+house.k10.3ii <- glm(price ~ sqft_living:grade + grade + yr_built, data = kc_house_log)
+summary(house.k10.3ii) # 13539
+house.k10.3ii.err <- cv.glm(data = kc_house_log,glmfit = house.k10.3ii, K = 10)
+round(house.k10.3ii.err$delta[1], 4) # 0.1096
+```
+
+4 predictors
+predictor : 4-i
+```{r}
+house.k10.4i <- glm(price ~ sqft_living + grade + yr_built + view, data = kc_house_log)
+summary(house.k10.4i) # 12272
+house.k10.4i.err <- cv.glm(data = kc_house_log,glmfit = house.k10.4i, K = 10)
+round(house.k10.4i.err$delta[1], 4) # 0.1033
+```
+
+predictor : 4-ii
+```{r}
+house.k10.4ii <- glm(price ~ sqft_living + grade + yr_built + bathrooms, data = kc_house_log)
+summary(house.k10.4ii) # 12351
+house.k10.4ii.err <- cv.glm(data = kc_house_log,glmfit = house.k10.4ii, K = 10)
+round(house.k10.4ii.err$delta[1], 4) # 0.1037
+```
+
+5 predictors
+predictor : 5-i
+```{r}
+house.k10.5i <- glm(price ~ sqft_living + grade + yr_built + view + bathrooms, data = kc_house_log)
+summary(house.k10.5i) # 11844
+house.k10.5i.err <- cv.glm(data = kc_house_log,glmfit = house.k10.5i, K = 10)
+round(house.k10.5i.err$delta[1], 4) # 0.1013
+```
+
+predictor : 5-ii
+```{r}
+house.k10.5ii <- glm(price ~ sqft_living + grade + yr_built + view + bathrooms, data = kc_house_log)
+summary(house.k10.5ii) # 11844
+house.k10.5ii.err <- cv.glm(data = kc_house_log,glmfit = house.k10.5ii, K = 10)
+round(house.k10.5ii.err$delta[1], 4) # 0.1013
+```
+
+6 predictors
+predictor : 6-i
+```{r}
+house.k10.6i <- glm(price ~ sqft_living + grade + yr_built + view + bathrooms + floors, data = kc_house_log)
+summary(house.k10.6i) # 11587
+house.k10.6i.err <- cv.glm(data = kc_house_log,glmfit = house.k10.6i, K = 10)
+round(house.k10.6i.err$delta[1], 4) # 0.1001
+```
+
+predictor : 6-ii
+```{r}
+house.k10.6ii <- glm(price ~ sqft_living + grade + yr_built + view + sqft_living:grade + floors, data = kc_house_log)
+summary(house.k10.6ii) # 11589
+house.k10.6ii.err <- cv.glm(data = kc_house_log,glmfit = house.k10.6ii, K = 10)
+round(house.k10.6ii.err$delta[1], 4) # 0.1001
+```
+
+Checking the r square and adj. r square values for house.k10.6i model
+```{r}
+house.k10.6i.lm <- lm(price ~ sqft_living + grade + yr_built + view + bathrooms + floors, data = kc_house_log)
+summary(house.k10.6i.lm)
+```
+
+Plot the model for house.k10.6i.lm model
+```{r}
+par(mfrow = c(2,2))
+plot(house.k10.4)
+```
+
+### Step 3.3 - Data transformation - log(price) conversion and using only numeric type parameters
+removing very less correlated variable by creating a new df
+```{r}
+house <- kc_house_log
+```
+remove sqft_lot, floors, waterfront, view, condition, sqft_basement, yr_built, yr_renovated i.e columns (5,6,7,8,9,13,14)
+
+```{r}
+house <- house[,-c(5,6,7,8,9,12,13,14)]
+```
+
+### Step 4.3 : Training a model on the data - log(price) conversion and using only numeric type parameters
+
+Model the linear model
+model fit 1
+```{r}
+house.fit1 <- lm(price ~ bedrooms*bathrooms*sqft_living*grade*sqft_above, data = house)
+```
+
+### Step 5.3 : Evaluating the model - log(price) conversion and using only numeric type parameters
+Checking the summary and plot of the model
+```{r}
+summary(house.fit1)
+par(mfrow = c(2,2))
+plot(house.fit1)
+```
+
+### Step 6.3 : Improving the model - log(price) conversion and using only numeric type parameters
+#### 1) Adding all the possible relation to the model
+fit 2
+```{r}
+house.fit2 <- update(house.fit1, ~ . + I(bedrooms^2) + I(bathrooms^2) + I(sqft_living^2) + I(grade^2) + I(sqft_above^2))
+summary(house.fit2)
+```
+
+fit 3
+```{r}
+house.fit3 <- update(house.fit2, ~ . + I(bedrooms^3) + I(bathrooms^3) + I(sqft_living^3) + I(grade^3) + I(sqft_above^3))
+summary(house.fit3)
+```
+
+fit 4
+```{r}
+house.fit4 <- update(house.fit3, ~ . + I(bedrooms^0.5) + I(bathrooms^0.5) + I(sqft_living^0.5) + I(grade^0.5) + I(sqft_above^0.5))
+summary(house.fit4)
+```
+
+fit 4 : step function
+```{r}
+house.fit5 <- step(house.fit4)
+summary(house.fit5)
+```
+
+fit 6 :  removing non - significant coefficients manually
+```{r}
+house.fit6 <- update(house.fit5, ~ . - bedrooms:sqft_above - bedrooms:sqft_living - bedrooms:bathrooms)
+summary(house.fit6)
+```
+
+fit 7 : step function
+```{r}
+house.fit7 <- update(house.fit6, ~ . - bathrooms)
+summary(house.fit7)
+```
+
+#### 2) check the best fit by ignoring uncorrelated variables
+from model 7 formula : 
+lm(formula = price ~ bedrooms + sqft_living + grade + sqft_above + 
+ I(bedrooms^2) + I(bathrooms^2) + I(sqft_living^2) + I(sqft_above^2) + 
+    I(bedrooms^3) + I(bathrooms^3) + I(sqft_living^3) + I(grade^3) + 
+    I(sqft_above^3) + I(bedrooms^0.5) + I(bathrooms^0.5) + I(grade^0.5) + 
+    bathrooms:sqft_living + bedrooms:grade + bathrooms:grade + 
+    sqft_living:grade + bathrooms:sqft_above + sqft_living:sqft_above + 
+    grade:sqft_above + bedrooms:bathrooms:sqft_living + bedrooms:bathrooms:sqft_above + 
+    bathrooms:sqft_living:sqft_above + bathrooms:grade:sqft_above + 
+    sqft_living:grade:sqft_above, data = house) 
+
+
+check the best fit
+```{r}
+bstFits1 <- regsubsets(price ~ bedrooms + sqft_living + grade + sqft_above + 
+                         I(bedrooms^2) + I(bathrooms^2) + I(sqft_living^2) + I(sqft_above^2) + 
+                         I(bedrooms^3) + I(bathrooms^3) + I(sqft_living^3) + I(grade^3) + 
+                         I(sqft_above^3) + I(bedrooms^0.5) + I(bathrooms^0.5) + I(grade^0.5) + 
+                         bathrooms:sqft_living + bedrooms:grade + bathrooms:grade + 
+                         sqft_living:grade + bathrooms:sqft_above + sqft_living:sqft_above + 
+                         grade:sqft_above + bedrooms:bathrooms:sqft_living + bedrooms:bathrooms:sqft_above + 
+                         bathrooms:sqft_living:sqft_above + bathrooms:grade:sqft_above + 
+                         sqft_living:grade:sqft_above, data = house, nbest = 1, nvmax = 4)
+par(mfrow = c(1,1))
+#subsets(bstFits1, statistic = "adjr2")
+plot(bstFits1, scale = "adjr2")
+```
+
+Final model - 
+```{r}
+house.final <- lm (price ~ sqft_living + grade + sqft_above, data = house)
+summary(house.final)
+par(mfrow = c(2,2))
+plot(house.final)
+```
+
+removing the influencial points
+```{r}
+house <- house[- c(12778),]
+```
+
+same model again
+```{r}
+house.final <- lm (price ~ sqft_living + grade + sqft_above, data = house)
+summary(house.final)
+par(mfrow = c(2,2))
+plot(house.final)
+```
+
+checking the accuracy using k-Fold method
+```{r}
+library(boot)
+house.glm <- glm(price ~ sqft_living + grade + sqft_above, data = house)
+summary(house.glm) # AIC = 15670
+house.glm.err<- cv.glm(data = house,glmfit = house.glm, K = 10)
+round(house.glm.err$delta[1],4)# 0.1209
+```

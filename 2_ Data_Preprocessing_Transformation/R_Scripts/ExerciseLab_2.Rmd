@@ -1,0 +1,121 @@
+---
+title: "ExerciseLab_2"
+output: html_document
+---
+
+Prerequisite
+```{r}
+#mtcars$cyl <- as.factor(mtcars$cyl)
+#mtcars$am <- factor(mtcars$am, labels=c("Automatic","Manual"), levels=c(0,1))
+
+```
+
+1. Are there more automatic or manual cars?
+```{r}
+if (sum(mtcars$am == "Automatic") > sum(mtcars$am == "Manual")) {
+  print("Automatic cars are more")
+} else { 
+  print("Manual cars are more")
+}
+```
+
+2. Which car is heaviest, and which is fastest?
+```{r}
+library(plyr)
+print(paste("heaviest car : ", row.names(mtcars)[which.max(mtcars$wt)]))
+print(paste("fastest car : ", row.names(mtcars)[which.max(mtcars$qsec)]))
+```
+
+3. Do automatic or manual cars have on average a better mpg?
+```{r}
+library(dplyr)
+auto.am <- filter(mtcars, am != "Manual")
+manual.am <- filter(mtcars, am == "Manual")
+if (mean(auto.am$mpg) > mean(manual.am$mpg)) {
+  print("Automatic cars have better mpg")
+} else if (mean(auto.am$mpg) < mean(manual.am$mpg)) {
+  print("Manual cars have better mpg")
+} else {
+  print("Both type of cars have same mpg")
+}
+```
+
+3. Do automatic or manual cars have on average a better mpg? (WITHOUT DPLYR)
+```{r}
+if (mean(mtcars$mpg[which(mtcars$am == "Automatic")]) > mean(mtcars$mpg[which(mtcars$am == "Manual")])) {
+  print("Automatic cars have better mpg on average")
+} else if (mean(mtcars$mpg[which(mtcars$am == "Automatic")]) < mean(mtcars$mpg[which(mtcars$am == "Manual")])) {
+  print("Manual cars have better mpg on average")
+} else {
+  print ("Both cars have same mpg on average")
+}
+```
+
+4. How many cars have above average hp?
+```{r}
+print(length(mtcars$hp[mtcars$hp > mean(mtcars$hp)]))
+
+# or
+
+print(sum(mtcars$hp > mean(mtcars$hp)))
+```
+
+
+5. Of the cars that have above average hp, how many have 6 cylinders?
+```{r}
+sum(mtcars$hp > mean(mtcars$hp) & mtcars$cyl == 6)
+```
+
+
+6. Of the cars that have above average hp, and 6 cylinders, how many are automatic?
+Questions covering material we haven’t covered yet (in case you finish early)
+```{r}
+sum(mtcars$hp > mean(mtcars$hp) & mtcars$cyl == 6 & mtcars$am == "Automatic")
+```
+
+
+7. Make a boxplot of mpg split by no. of cylinders
+```{r}
+boxplot(mtcars$mpg ~ mtcars$cyl)
+```
+
+
+8. In the above boxplot are there outliers?
+Yes, we have outlier in 8 cylinder
+
+9. Take a random 50% sample of the dataset, and rerun questions above to see what changes
+```{r}
+index <- sample(1:nrow(mtcars), size = nrow(mtcars)/2)
+mtcars.half <- mtcars[index,]
+```
+
+10. Split the dataset in 2, one half containing only automatics, and one half containing only manual transmissions
+```{r}
+mtcars.auto <- mtcars[which(mtcars$am == "Automatic"),]
+mtcars.manual <- mtcars[which(mtcars$am == "Manual"),]
+```
+
+11. For each half, plot mpg against hp using the plot function
+```{r}
+plot(x = mtcars.auto$mpg, y = mtcars.auto$hp, main="MPG vs. HP for Automatics")
+```
+```{r}
+plot(x = mtcars.manual$mpg, y = mtcars.manual$hp, main="MPG vs. HP for Manual")
+```
+
+
+12. Add an “abline” that “fits” a linear model between the two variables in the plots you just drew
+```{r}
+linerModel.auto <- lm(mpg ~ hp, mtcars.auto)
+plot(x = mtcars.auto$hp, y = mtcars.auto$mpg, main="MPG vs. HP for Automatics")
+abline(linerModel.auto)
+```
+
+```{r}
+linerModel.manual <- lm(mpg ~ hp, mtcars.manual)
+plot(x = mtcars.manual$hp, y = mtcars.manual$mpg, main="MPG vs. HP for Automatics")
+abline(linerModel.auto)
+```
+
+
+Solutions will be available next week. However, I expect you to have completed the first 6, and attempted at least 1 of questions 7-12.

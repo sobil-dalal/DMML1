@@ -1,0 +1,114 @@
+---
+title: "Appendix 3 - Customer’s  decision  to  open  a  term  deposit account"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+## Part 3 - Decision Tree
+
+### Step 1 : Collecting Data
+Same as of Part 1
+
+### Step 2 : Exploring, preprocessing and cleaning the data
+Primary setup
+```{r setup}
+knitr::opts_knit$set(root.dir = '/Users/sobil/Documents/MSC/Sem 1/Data Mining & Machine Learning/Project/Bank/')
+remove(list = ls())
+set.seed(1)
+```
+
+loading all the libraries required
+```{r}
+library(caret)
+library(C50)
+library(RWeka)
+```
+
+rest same as part 1
+```{r}
+source("bank_import_primaryExplore.R")
+```
+
+### Step 3 - Data transformation & preparation
+creating training and testing dataset from exisitng sample
+```{r}
+set.seed(1)
+indx <- createDataPartition(bank$y, p = 0.8, list = FALSE)
+
+bank_train <- bank[indx,]
+bank_test <- bank[- indx,]
+
+prop.table(table(bank_train$y))
+prop.table(table(bank_test$y))
+```
+
+### Step 4 : Train the model
+```{r}
+bank_model <- C50::C5.0(bank_train[-21],bank_train$y)
+```
+
+### Step 5 : Evaluate the model
+```{r}
+bank_model
+bank_predict <- predict(object = bank_model, newdata = bank_test)
+caret::confusionMatrix(bank_predict, bank_test$y)
+```
+
+### Step 6 : Improving model performance
+#### 1) Method 1 - Boosting trials = 10
+```{r}
+bank_boost10 <- C50::C5.0(bank_train[-21], bank_train$y, trials = 10)
+bank_boost10
+
+bank_boost_predict10 <- predict(object = bank_boost10, newdata = bank_test)
+caret::confusionMatrix(bank_boost_predict10, bank_test$y)
+```
+
+#### 2) Method 2 - Boosting trials = 5
+```{r}
+bank_boost5 <- C50::C5.0(bank_train[-21], bank_train$y, trials = 5)
+bank_boost5
+
+bank_boost_predict5 <- predict(object = bank_boost5, newdata = bank_test)
+caret::confusionMatrix(bank_boost_predict5, bank_test$y)
+```
+
+#### 3) Method 3 - Adding Cost matrix
+creating cost matrix - "yes" more costlier than others
+```{r}
+mtr_dim <- list(c("no", "yes"), c("no","yes"))
+names(mtr_dim) <- c("predict","actual")
+mtr_dim
+
+err_cst <- matrix(c(0,1,0,4), nrow = 2, dimnames = mtr_dim)
+err_cst
+```
+
+Model Costs
+```{r}
+bank_cost <- C50::C5.0(bank_train[-21], bank_train$y, costs = err_cst)
+bank_cost_predict <- predict(object = bank_cost, newdata = bank_test)
+caret::confusionMatrix(bank_cost_predict, bank_test$y)
+```
+
+#### 4) Method 4 - 1R algo model
+```{r}
+bank_1R <- OneR(y ~ ., data = bank_train)
+bank_1R
+bank_predict_1R <- predict(object = bank_1R, newdata = bank_test)
+caret::confusionMatrix(bank_predict_1R, bank_test$y)
+```
+
+#### 5) Method 5 - RIPPER algo model
+```{r}
+bank_JRip <- JRip(y ~ . , data = bank_train)
+bank_JRip
+bank_predict_JRip <- predict(object = bank_JRip, newdata = bank_test)
+caret::confusionMatrix(bank_predict_JRip, bank_test$y)
+#kappa = 0.5667,   Sensitivity = 0.58513,    Specificity = 0.95895 ====> BEST
+```
+```{r}
+caret::confusionMatrix(bank_predict_JRip, bank_test$y, mode="prec_recall")
+```
+

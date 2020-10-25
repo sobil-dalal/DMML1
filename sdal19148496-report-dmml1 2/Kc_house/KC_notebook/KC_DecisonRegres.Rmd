@@ -1,0 +1,113 @@
+---
+title: "Appendix 1 - King County house price prediction"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+## Part 2 - Decision Tree Regression Model
+
+### Step 1 : Collecting Data
+Same as of Part 1 : Step 1
+
+### Step 2 : Exploring, preprocessing and cleaning the data
+Primary setup
+```{r setup}
+knitr::opts_knit$set(root.dir = '/Users/sobil/Documents/MSC/Sem 1/Data Mining & Machine Learning/Project/Kc_house/')
+remove(list = ls())
+set.seed(1)
+```
+
+adding alll the libraries required
+```{r}
+library(RWeka)
+library(rpart)
+library(rpart.plot)
+library(caret)
+```
+
+
+ Rest is same as of Part 1 : Step 2
+```{r}
+source("Kc_Import_Explore_Clean.R")
+```
+
+### Step 3 - Data transformation & preparation
+creating training and testing dataset from exisitng sample
+```{r}
+indx <- createDataPartition(kc_house$price, p = 0.8, list = FALSE)
+
+house_train <- kc_house[indx,]
+house_test <- kc_house[- indx,]
+```
+
+### Step 4 : Training a model
+modeling a regression tree
+```{r}
+house.rpart <- rpart(price ~ ., data = house_train)
+```
+
+### Step 5 : Evaluating the model
+Summary of the model and description
+```{r}
+#house.rpart
+summary(house.rpart)
+```
+
+visulazing decision tree
+```{r}
+rpart.plot(house.rpart, digits = 3)
+```
+
+Evaluating the model on testing data
+```{r}
+house.predict.rpart <- predict(house.rpart, house_test)
+summary(house.predict.rpart)
+summary(house_test$price)
+```
+
+checking correlation
+```{r}
+cor(house.predict.rpart, house_test$price)
+```
+
+cheking performace with MAE
+creating a function mae to calculate Mean Absolute error
+```{r}
+mae <- function(actual, pred) {
+  mean(abs(actual-pred))
+}
+```
+
+MAE with respect to predicted values
+```{r}
+mae(house_test$price, house.predict.rpart)
+```
+
+MAE with respect to mean values
+```{r}
+mae(mean(house_train$price), house.predict.rpart)
+```
+RMSE - Root Mean Squared Error - log values to compare to multi-linear model 
+```{r}
+RMSE(log(house_test$price), log(house.predict.rpart))
+```
+
+
+### Step 6 : Improving the model
+modeling a model tree
+```{r}
+house.m5p <- M5P(price ~ . , data = house_train)
+#house.m5p
+summary(house.m5p)
+```
+
+```{r}
+house.predict.m5p <- predict(house.m5p, house_test)
+summary(house.predict.m5p)
+```
+```{r}
+cor(house.predict.m5p, house_test$price)
+mae(house_test$price, house.predict.m5p)
+RMSE(log(house_test$price), log(house.predict.m5p))
+```

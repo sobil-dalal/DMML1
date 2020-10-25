@@ -1,0 +1,358 @@
+---
+title: "Appendix 3 - Customer’s  decision  to  open  a  term  deposit account"
+output:
+  html_notebook: default
+  word_document: default
+---
+
+## Part 1 - KNN Model
+
+### Step 1 : Collecting Data
+The data set is collected in CSV format from UCI.edu and below is the reference for the same.
+
+S. Moro, P. Cortez, and P. Rita. (2014) A data-driven approach to predictthe success of bank telemarketing. Decision Support Systems,. [Online].Available: https://archive.ics.uci.edu/ml/datasets/bank marketing
+
+### Step 2 : Exploring, preprocessing and cleaning the data
+Primary setup
+```{r setup}
+knitr::opts_knit$set(root.dir = '/Users/sobil/Documents/MSC/Sem 1/Data Mining & Machine Learning/Project/Bank/')
+remove(list = ls())
+set.seed(1)
+```
+
+loading all the libraries required
+```{r}
+library(gmodels)
+library(caret)
+library(dplyr)
+library(class)
+library(fastDummies)
+```
+
+#### 1) reading the raw csv file
+```{r}
+bank <- read.csv("bank-additional-full.csv", sep = ";")
+```
+
+#### 2) exploratory analysis 
+Structure of the bank data frame
+```{r}
+str(bank)
+```
+
+Summary of the bank data frame
+```{r}
+summary(bank)
+```
+
+checking the overall distribution of prediction/ target charcterstics/feature
+```{r}
+gmodels::CrossTable(bank$y)
+```
+
+converting the target feature into factor with adding labels for more information
+```{r}
+bank$y <- factor(bank$y, levels = c("yes", "no"), labels = c("Yes", "No"))
+```
+
+cheking NAs
+```{r}
+apply(X = bank,MARGIN =  2, FUN = function(col) any(is.na(col))) # no NAs
+```
+
+### Step 3.1 - Data transformation & preparation - Normalizing the data with custom function
+
+normalizing the data to standardize range of values of various characterstics
+#### 1) creating normalized method
+```{r}
+nor <- function(val) {
+  return((val - min(val))/(max(val) - min(val)))
+}
+```
+
+getting normalised variables in a data frame
+```{r}
+bank_n_cont <- as.data.frame(lapply(bank[c(1,11,12,13,14,16,17,18,19,20)], nor))
+summary(bank_n_cont)
+```
+
+#### 2) creating a new df of only independent variables with normalised columns
+```{r}
+bank_n <- bank[,-21]
+bank_n$age <- bank_n_cont$age
+bank_n$duration <- bank_n_cont$duration
+bank_n$campaign <- bank_n_cont$campaign
+bank_n$pdays <- bank_n_cont$pdays
+bank_n$previous <- bank_n_cont$previous
+bank_n$emp.var.rate <- bank_n_cont$emp.var.rate
+bank_n$cons.price.idx <- bank_n_cont$cons.price.idx
+bank_n$cons.conf.idx <- bank_n_cont$cons.conf.idx
+bank_n$euribor3m <- bank_n_cont$euribor3m
+bank_n$nr.employed <- bank_n_cont$nr.employed
+summary(bank_n)
+```
+
+#### 3) creating dummy columns for categorical columns
+```{r}
+bank_n <- fastDummies::dummy_cols(bank_n, remove_first_dummy = TRUE) # remove_first_dummy = TRUE to avoid multi-collinearity
+```
+
+removing categorical columns from df (dummy are included)
+```{r}
+bank_n <- bank_n[,-c(2:10,15)]
+```
+
+#### 4) creating training and testing dataset from exisitng sample
+```{r}
+indx <- createDataPartition(bank$y, p = 0.8, list = FALSE)
+bank_train <- bank_n[indx,]
+bank_test <- bank_n[- indx,]
+```
+
+creating lables for test and training data sets
+```{r}
+bank_train_labels <- bank[indx,21]
+bank_test_labels <- bank[- indx,21]
+```
+
+### Step 4.1 : Training a model on the data - Normalizing the data with custom function
+using the knn method of class package with K value equalent to square root of total train observation & odd number to eliminate tie vote issue for 2 factor classification i.e. 
+```{r}
+bank$y %>% length %>% sqrt %>% round # 203
+bank_test_predict <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = 203)
+```
+
+### Step 5.1 : Evaluating the model - Normalizing the data with custom function
+"Model 1 : k = 203"
+```{r}
+confusionMatrix(data = bank_test_predict,reference = bank_test_labels)
+```
+
+### Step 6.1 : Improving the model
+#### 1) Changing k values
+
+```{r}
+bank_test_predict2 <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = 151)
+print("Model 2 : k = 151")
+print(confusionMatrix(data = bank_test_predict2,reference = bank_test_labels))
+```
+
+predict = 3     : k = 101
+```{r}
+bank_test_predict3 <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = 101)
+print("Model 3 : k = 101")
+print(confusionMatrix(data = bank_test_predict3,reference = bank_test_labels))
+
+bank_test_predict4 <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = 75)
+print("Model 4 : k = 75")
+print(confusionMatrix(data = bank_test_predict4,reference = bank_test_labels))
+
+bank_test_predict5 <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = 51)
+print("Model 5 : k = 51")
+print(confusionMatrix(data = bank_test_predict5,reference = bank_test_labels))
+
+bank_test_predict6 <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = 31)
+print("Model 6 : k = 31")
+print(confusionMatrix(data = bank_test_predict6,reference = bank_test_labels))
+
+bank_test_predict7 <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = 21)
+print("Model 7 : k = 21")
+print(confusionMatrix(data = bank_test_predict7,reference = bank_test_labels))
+
+bank_test_predict8 <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = 11)
+print("Model 8 : k = 11")
+print(confusionMatrix(data = bank_test_predict8,reference = bank_test_labels))
+```
+
+Model n : k = 9 to 1 (only odd numbers)
+```{r}
+i <- 9
+while (i > 0) {
+  bank_test_predict_n <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = i)
+  print(i)
+  print(confusionMatrix(data = bank_test_predict_n,reference = bank_test_labels))
+  i <- i - 2
+}
+```
+
+Model n : k = 19 to 13 (only odd numbers)
+```{r}
+i <- 19
+while (i > 11) {
+  bank_test_predict_n <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = i)
+  print(i)
+  print(confusionMatrix(data = bank_test_predict_n,reference = bank_test_labels))
+  i <- i - 2
+}
+```
+
+Model n : k = 29 to 23 (only odd numbers)
+```{r}
+i <- 29
+while (i > 21) {
+  bank_test_predict_n <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = i)
+  print(i)
+  print(confusionMatrix(data = bank_test_predict_n,reference = bank_test_labels))
+  i <- i - 2
+}
+```
+
+#### 2) Best among all is for K = 3
+```{r}
+bank_test_predict.best <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = 3)
+print(confusionMatrix(data = bank_test_predict.best,reference = bank_test_labels))
+```
+
+### Step 3.2 - Data transformation & preparation - Normalizing the data with inbuilt R function
+
+Redoing the first 2 steps before transformation
+```{r}
+source("/Users/sobil/Documents/MSC/Sem 1/Data Mining & Machine Learning/Project/Bank/bank_import_primaryExplore.R")
+```
+
+normalizing the data to standardize range of values of various characterstics
+
+getting normalised variables in a data frame
+
+#### 1) Normalization using scale inbulit R method based upon using z score
+```{r}
+bank_n_cont <- as.data.frame(scale(bank[c(1,11,12,13,14,16,17,18,19,20)]))
+summary(bank_n_cont)
+```
+
+#### 2) creating a new df of only independent variables
+```{r}
+bank_n <- bank[,-21]
+bank_n$age <- bank_n_cont$age
+bank_n$duration <- bank_n_cont$duration
+bank_n$campaign <- bank_n_cont$campaign
+bank_n$pdays <- bank_n_cont$pdays
+bank_n$previous <- bank_n_cont$previous
+bank_n$emp.var.rate <- bank_n_cont$emp.var.rate
+bank_n$cons.price.idx <- bank_n_cont$cons.price.idx
+bank_n$cons.conf.idx <- bank_n_cont$cons.conf.idx
+bank_n$euribor3m <- bank_n_cont$euribor3m
+bank_n$nr.employed <- bank_n_cont$nr.employed
+summary(bank_n)
+```
+
+#### 3) creating dummy columns for categorical columns
+```{r}
+bank_n <- fastDummies::dummy_cols(bank_n, remove_first_dummy = TRUE) # remove_first_dummy = TRUE to avoid multi-collinearity
+```
+
+removing categorical columns from df (dummy are included)
+```{r}
+bank_n <- bank_n[,-c(2:10,15)]
+```
+
+
+#### 4) creating training and testing dataset from exisitng sample
+```{r}
+indx <- createDataPartition(bank$y, p = 0.8, list = FALSE)
+bank_train <- bank_n[indx,]
+bank_test <- bank_n[- indx,]
+```
+
+creating lables for test and training data sets
+```{r}
+bank_train_labels <- bank[indx,21]
+bank_test_labels <- bank[- indx,21]
+```
+
+### Step 4.2 : Training a model on the data - Normalizing the data with inbuilt R function
+using the knn method of class package with K odd 
+```{r}
+bank_test_predict <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = 51)
+```
+
+### Step 5.2 : Evaluating the model - Normalizing the data with inbuilt R function
+"Model 1 : k = 51"
+```{r}
+confusionMatrix(data = bank_test_predict,reference = bank_test_labels)
+```
+
+### Step 6.2 : Improving the model - Normalizing the data with inbuilt R function
+#### 1) Changing k values
+Skipped model for K values which were higher than 51 (please refer the R script for model performance) - overall the performance was poor than below
+
+Model n : k = 31 to 1 (only odd numbers)"
+```{r}
+i <- 31
+while (i > 0) {
+  bank_test_predict_n <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = i)
+  print(i)
+  print(confusionMatrix(data = bank_test_predict_n,reference = bank_test_labels))
+  i <- i - 2
+}
+```
+
+#### 2) Best among all is for K = 9
+```{r}
+bank_test_predict.best <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = 9)
+print(confusionMatrix(data = bank_test_predict.best,reference = bank_test_labels))
+```
+
+### Step 3.3 - Data transformation & preparation - Only numeric predictors
+
+Redoing the first 2 steps before transformation
+```{r}
+source("/Users/sobil/Documents/MSC/Sem 1/Data Mining & Machine Learning/Project/Bank/bank_import_primaryExplore.R")
+```
+
+#### 1) Creating new data frame with only numeric predicors and normalizaing them
+From previous section, it is clear that inbuilt normalization is performing better, Thus Normalization using scale inbulit R method based upon using z score
+```{r}
+bank_n <- as.data.frame(scale(bank[c(1,11,12,13,14,16,17,18,19,20)]))
+summary(bank_n)
+```
+
+
+#### 2) creating training and testing dataset from exisitng sample
+```{r}
+indx <- createDataPartition(bank$y, p = 0.8, list = FALSE)
+bank_train <- bank_n[indx,]
+bank_test <- bank_n[- indx,]
+```
+
+creating lables for test and training data sets
+```{r}
+bank_train_labels <- bank[indx,21]
+bank_test_labels <- bank[- indx,21]
+```
+
+### Step 4.3 : Training a model on the data - Only numeric predictors
+using the knn method of class package with K odd 
+```{r}
+bank_test_predict <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = 51)
+```
+
+### Step 5.3 : Evaluating the model - Only numeric predictors
+"Model 1 : k = 51"
+```{r}
+confusionMatrix(data = bank_test_predict,reference = bank_test_labels)
+```
+
+### Step 6.3 : Improving the model - Only numeric predictors
+#### 1) Changing k values
+Skipped model for K values which were higher than 51 (please refer the R script for model performance) - overall the performance was poor than below
+
+Model n : k = 31 to 1 (only odd numbers)"
+```{r}
+i <- 31
+while (i > 0) {
+  bank_test_predict_n <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = i)
+  print(i)
+  print(confusionMatrix(data = bank_test_predict_n,reference = bank_test_labels))
+  i <- i - 2
+}
+```
+
+#### 2) Best among all is for K = 19
+```{r}
+bank_test_predict.best <- class::knn(train = bank_train, test = bank_test, cl = bank_train_labels, k = 19)
+print(confusionMatrix(data = bank_test_predict.best,reference = bank_test_labels))
+```
+```{r}
+confusionMatrix(data = bank_test_predict.best,reference = bank_test_labels, mode="prec_recall")
+```
